@@ -718,6 +718,8 @@ dependencies = [
  "either",
  "env_logger",
  "fast2s",
+ "futures 0.3.28",
+ "gloo-utils",
  "graph",
  "itertools 0.11.0",
  "jieba-rs",
@@ -742,6 +744,7 @@ dependencies = [
  "rust-stemmers",
  "rustc-hash",
  "serde",
+ "serde-wasm-bindgen",
  "serde_bytes",
  "serde_derive",
  "serde_json",
@@ -759,6 +762,9 @@ dependencies = [
  "twox-hash",
  "unicode-normalization",
  "uuid",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "web-sys",
 ]
 
 [[package]]
@@ -792,11 +798,13 @@ dependencies = [
 
 [[package]]
 name = "cozo-lib-wasm"
-version = "0.7.4"
+version = "0.7.71"
 dependencies = [
  "console_error_panic_hook",
  "cozo",
+ "js-sys",
  "wasm-bindgen",
+ "wasm-bindgen-futures",
  "wasm-bindgen-test",
  "wee_alloc",
 ]
@@ -1473,6 +1481,19 @@ name = "glob"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d2fabcfbdc87f4758337ca535fb41a6d701b65693ce38287d856d1674551ec9b"
+
+[[package]]
+name = "gloo-utils"
+version = "0.1.7"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "037fcb07216cb3a30f7292bd0176b050b7b9a052ba830ef7d5d65f6dc64ba58e"
+dependencies = [
+ "js-sys",
+ "serde",
+ "serde_json",
+ "wasm-bindgen",
+ "web-sys",
+]
 
 [[package]]
 name = "graph"
@@ -3466,6 +3487,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "serde-wasm-bindgen"
+version = "0.4.5"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "e3b4c031cd0d9014307d82b8abf653c0290fbdaeb4c02d00c63cf52f728628bf"
+dependencies = [
+ "js-sys",
+ "serde",
+ "wasm-bindgen",
+]
+
+[[package]]
 name = "serde_bytes"
 version = "0.11.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4362,6 +4394,8 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7706a72ab36d8cb1f80ffbf0e071533974a60d0a308d01a5d0375bf60499a342"
 dependencies = [
  "cfg-if 1.0.0",
+ "serde",
+ "serde_json",
  "wasm-bindgen-macro",
 ]
 

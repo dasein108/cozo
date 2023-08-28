@@ -512,6 +512,13 @@ impl DbInstance {
             receiver: db2app_recv,
         }
     }
+
+    pub fn import_from_indexdb(&mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
+        match self {
+            DbInstance::Mem(db) => db.import_from_indexdb(keys, values),
+            _ => panic!("import_from_indexdb is only supported for mem storage"),
+        }
+    }
 }
 
 /// A multi-transaction handle.

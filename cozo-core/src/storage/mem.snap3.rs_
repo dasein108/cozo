@@ -26,9 +26,19 @@ use crate::storage::{Storage, StoreTx};
 use crate::utils::swap_option_result;
 
 use wasm_bindgen::prelude::*;
+use wasm_bindgen::JsCast;
+use wasm_bindgen_futures::JsFuture;
+// use futures::executor::block_on;
+use wasm_bindgen_futures::spawn_local;
+use futures::future::join;
 
-use js_sys::Uint8Array;
+// use web_sys::IdbDatabase;
+use js_sys::{JSON, Uint8Array, Array};
 use serde::{Serialize, Deserialize};
+use serde_json;
+
+use futures::channel::oneshot; // Add this import for the channel
+use std::sync::mpsc;
 
 
 // Next let's define a macro that's like `println!`, only it works for
@@ -76,61 +86,67 @@ struct SerializedMap {
     value: String,
 }
 
-// pub fn map_to_string(map: &BTreeMap<Vec<u8>, Vec<u8>>) -> Result<String, serde_json::Error> {
-//     let serialized_map: Vec<SerializedMap> = map.iter().map(|(k, v)| {
-//         SerializedMap {
-//             key: base64::encode(k),
-//             value: base64::encode(v),
-//         }
-//     }).collect();
+pub fn map_to_string(map: &BTreeMap<Vec<u8>, Vec<u8>>) -> Result<String, serde_json::Error> {
+    let serialized_map: Vec<SerializedMap> = map.iter().map(|(k, v)| {
+        SerializedMap {
+            key: base64::encode(k),
+            value: base64::encode(v),
+        }
+    }).collect();
 
-//     serde_json::to_string(&serialized_map)
-// }
+    serde_json::to_string(&serialized_map)
+}
 
-// pub async fn fetch_all_items() -> Result<BTreeMap<Vec<u8>, Vec<u8>>, JsValue> {
-//     // Call the JS function
-//     let promise = getAllItems();
+pub async fn fetch_all_items() -> Result<BTreeMap<Vec<u8>, Vec<u8>>, JsValue> {
+    // Call the JS function
+    let promise = getAllItems();
 
-//     // Convert the Promise into a Rust Future
-//     let js_result = JsFuture::from(promise).await?;
+    // Convert the Promise into a Rust Future
+    let js_result = JsFuture::from(promise).await?;
 
-//     // Convert the result to a JavaScript Array
-//     let outer_array: Array = js_result.dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to Array")
-//     })?;
+    // Convert the result to a JavaScript Array
+    let outer_array: Array = js_result.dyn_into().map_err(|_| {
+        JsValue::from_str("Error converting to Array")
+    })?;
 
-//     // Extract the two inner arrays
-//     let keys_array: Array = outer_array.get(0).dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to keys Array")
-//     })?;
-//     let values_array: Array = outer_array.get(1).dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to values Array")
-//     })?;
+    // Extract the two inner arrays
+    let keys_array: Array = outer_array.get(0).dyn_into().map_err(|_| {
+        JsValue::from_str("Error converting to keys Array")
+    })?;
+    let values_array: Array = outer_array.get(1).dyn_into().map_err(|_| {
+        JsValue::from_str("Error converting to values Array")
+    })?;
 
-//     let mut map = BTreeMap::new();
-//     for i in 0..keys_array.length() {
-//         let key_item = keys_array.get(i);
-//         let value_item = values_array.get(i);
+    // console_log!("keys_array2: {:?}", keys_array);
+    // console_log!("values_array2: {:?}", values_array);
+    // Convert the Arrays of Uint8Array to a BTreeMap
+    let mut map = BTreeMap::new();
+    for i in 0..keys_array.length() {
+        let key_item = keys_array.get(i);
+        let value_item = values_array.get(i);
+        // console_log!("ins item: {:?} {:?} {:?}", i, key_item, value_item);
 
-//         if let (Some(key_uint8_array), Some(value_uint8_array)) = (key_item.dyn_ref::<Uint8Array>(), value_item.dyn_ref::<Uint8Array>()) {
-//             let mut key_vec = vec![0; key_uint8_array.length() as usize];
-//             key_uint8_array.copy_to(&mut key_vec);
 
-//             let mut value_vec = vec![0; value_uint8_array.length() as usize];
-//             value_uint8_array.copy_to(&mut value_vec);
+        if let (Some(key_uint8_array), Some(value_uint8_array)) = (key_item.dyn_ref::<Uint8Array>(), value_item.dyn_ref::<Uint8Array>()) {
+            let mut key_vec = vec![0; key_uint8_array.length() as usize];
+            key_uint8_array.copy_to(&mut key_vec);
 
-//             map.insert(key_vec, value_vec);
-//         }
-//     }
-//     console_log!("map2: {:?}", map);
-//     Ok(map)
-// }
+            let mut value_vec = vec![0; value_uint8_array.length() as usize];
+            value_uint8_array.copy_to(&mut value_vec);
+            // console_log!("ins vec: {:?} {:?} {:?}", i, key_vec, value_vec);
+
+            map.insert(key_vec, value_vec);
+        }
+    }
+    console_log!("map2: {:?}", map);
+    Ok(map)
+}
 
 /// Create a database backed by memory.
 /// This is the fastest storage, but non-persistent.
 /// Supports concurrent readers but only a single writer.
 pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
-    let ret = crate::Db::new(MemStorage::default())?;
+    let ret = crate::Db::new(MemStorage::new())?;
 
     ret.initialize()?;
     Ok(ret)
@@ -143,6 +159,16 @@ pub struct MemStorage {
     // db: IdbDatabase
 }
 
+impl MemStorage {
+    /// Constructor for MemStorage
+    pub fn new() -> Self {
+
+        MemStorage {
+            store: Arc::new(ShardedLock::new(BTreeMap::new())),
+        }
+    }
+}
+
 impl<'s> Storage<'s> for MemStorage {
     type Tx = MemTx<'s>;
 
@@ -150,15 +176,51 @@ impl<'s> Storage<'s> for MemStorage {
         "mem"
     }
 
-    fn import_from_indexdb(&'s mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
-        console_log!("Import from indexDB {:?} {:?}", keys, values);
-        let mut store = self.store.write().unwrap();
+    fn import_from_indexdb(&'s mut self) -> Result<bool> {
+        log("run spawn_local");
+        // let (tx, mut rx) = oneshot::channel();
+        let (tx, rx) = mpsc::channel();
+        spawn_local (async move {
+            let result = fetch_all_items().await;
+            console_log!("Initializing fetch_all_items spawn_local2 {:?}", result);
+            let _ = tx.send(result);
+            // Send the result through the channel
+        });
 
-        for (key, value) in keys.into_iter().zip(values.into_iter()) {
-            store.insert(key, value);
-        }
-        console_log!("MemStorage  value {:?}", self.store);
+        // Receive the result outside of the spawn_local block
+        let result = rx.try_recv();//.map_err(|_| "Failed to receive result")?;
+        console_log!("fetch result .. {:?}", result);
+        let store = match result {
+            Ok(indexdb_store) => {
+                match indexdb_store {
+                    Ok(indexdb_store) => {
+                        let store = Arc::new(ShardedLock::new(indexdb_store.clone()));
+                        let result = map_to_string(&indexdb_store);
+                        console_log!("fetch_all_item indexdb_stores: {:?}", indexdb_store);
+                        console_log!("fetch_all_item result: {:?}", result);
+                        match result {
+                            Ok(json_str) =>  console_log!("fetch_all_items: {:?}", json_str),
+                            Err(e) => console_log!("Error: {:?}", e),
+                        }
+                        store
 
+                    },
+                    Err(e) => {
+                        console_log!("Error fetch_all_items: {:?}", e);
+                        Arc::new(ShardedLock::new(BTreeMap::new()))
+                        // Handle the error here
+                    }
+
+                }
+            },
+            Err(e) => {
+                console_log!("Error fetch_all_items result: {:?}", e);
+                // Handle the error here
+                Arc::new(ShardedLock::new(BTreeMap::new()))
+            }
+        };
+
+        console_log!("Initializing MemStorage return value {:?}", store);
         Ok(true)
     }
 
@@ -278,10 +340,19 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
                 let mut cache = BTreeMap::default();
                 mem::swap(&mut cache, cached);
                 log("committing changes");
-
+                let items_js_value = JsValue::from_serde(&cached).unwrap_or_else(|_| {
+                    panic!("Failed to convert cached to JsValue");
+                });
+                // setItemsBatch(&JsValue::null(), &items_js_value);
                 for (k, mv) in cache {
                     let key_js_value = Uint8Array::from(&k[..]).into();
 
+                    // Convert the Option<Vec<u8>> to JsValue
+                    // let value_js_value = match mv {
+                    //     Some(v) => Uint8Array::from(&v[..]).into(),
+                    //     None => JsValue::null(),
+                    // };
+                    // setItem(&key_js_value, &value_js_value);
                     match mv {
                         None => {
                             wtr.remove(&k);

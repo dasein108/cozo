@@ -43,6 +43,11 @@ impl<'s> Storage<'s> for TempStorage {
     ) -> Result<()> {
         panic!("batch put compact called on temp store")
     }
+
+    fn  import_from_indexdb(&'s mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
+        panic!("Not implemented")
+    }
+
 }
 
 pub(crate) struct TempTx {
