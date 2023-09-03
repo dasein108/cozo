@@ -45,86 +45,12 @@ extern "C" {
     pub fn log(s: &str);
 }
 
-#[wasm_bindgen(raw_module = "../../src/idbUtils.js")]
+#[wasm_bindgen(raw_module = "../../src/idbsUtils.js")]
 extern "C" {
     fn openDatabase() -> js_sys::Promise;
-    fn getAllItems() -> js_sys::Promise;
-    fn setItemsBatch(items: &JsValue) -> js_sys::Promise;
     fn setItem(key: &JsValue, value: &JsValue) -> js_sys::Promise;
 }
 
-// pub async fn fetch_all_items() -> Result<Object, JsValue> {
-//     let db_promise = openDatabase();
-//     let db_future = JsFuture::from(db_promise).await?;
-//     // Call the JS function
-//     let promise = getAllItems();
-
-//     // Convert the Promise into a Rust Future
-//     let js_result = JsFuture::from(promise).await?;
-
-//     // Convert the result to the desired Rust type
-//     let result_obj: Object = js_result.dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to desired type")
-//     })?;
-
-//     Ok(result_obj)
-// }
-
-#[derive(Serialize, Deserialize)]
-struct SerializedMap {
-    key: String,
-    value: String,
-}
-
-// pub fn map_to_string(map: &BTreeMap<Vec<u8>, Vec<u8>>) -> Result<String, serde_json::Error> {
-//     let serialized_map: Vec<SerializedMap> = map.iter().map(|(k, v)| {
-//         SerializedMap {
-//             key: base64::encode(k),
-//             value: base64::encode(v),
-//         }
-//     }).collect();
-
-//     serde_json::to_string(&serialized_map)
-// }
-
-// pub async fn fetch_all_items() -> Result<BTreeMap<Vec<u8>, Vec<u8>>, JsValue> {
-//     // Call the JS function
-//     let promise = getAllItems();
-
-//     // Convert the Promise into a Rust Future
-//     let js_result = JsFuture::from(promise).await?;
-
-//     // Convert the result to a JavaScript Array
-//     let outer_array: Array = js_result.dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to Array")
-//     })?;
-
-//     // Extract the two inner arrays
-//     let keys_array: Array = outer_array.get(0).dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to keys Array")
-//     })?;
-//     let values_array: Array = outer_array.get(1).dyn_into().map_err(|_| {
-//         JsValue::from_str("Error converting to values Array")
-//     })?;
-
-//     let mut map = BTreeMap::new();
-//     for i in 0..keys_array.length() {
-//         let key_item = keys_array.get(i);
-//         let value_item = values_array.get(i);
-
-//         if let (Some(key_uint8_array), Some(value_uint8_array)) = (key_item.dyn_ref::<Uint8Array>(), value_item.dyn_ref::<Uint8Array>()) {
-//             let mut key_vec = vec![0; key_uint8_array.length() as usize];
-//             key_uint8_array.copy_to(&mut key_vec);
-
-//             let mut value_vec = vec![0; value_uint8_array.length() as usize];
-//             value_uint8_array.copy_to(&mut value_vec);
-
-//             map.insert(key_vec, value_vec);
-//         }
-//     }
-//     console_log!("map2: {:?}", map);
-//     Ok(map)
-// }
 
 /// Create a database backed by memory.
 /// This is the fastest storage, but non-persistent.
@@ -140,7 +66,6 @@ pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
 #[derive(Default, Clone)]
 pub struct MemStorage {
     store: Arc<ShardedLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
-    // db: IdbDatabase
 }
 
 impl<'s> Storage<'s> for MemStorage {

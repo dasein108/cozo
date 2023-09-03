@@ -5,6 +5,8 @@ const dbName = "cozo-idb";
 const storeName = "cozodoy";
 let db = null;
 
+const decoder = new TextDecoder("utf-8");
+
 export async function openDatabase() {
   console.log("----Open Database----");
   try {
@@ -34,8 +36,9 @@ export async function getAllItems() {
   );
   const dbg = keys.map((key, index) => {
     return {
-      key: uint8ArrayToAsciiString(key),
-      value: uint8ArrayToAsciiString(items[index]),
+      key: decoder.decode(key),
+      value: decoder.decode(items[index]),
+      items: items[index],
     };
   });
   console.log("----getAllItems----", keys, items, dbg);
@@ -43,24 +46,20 @@ export async function getAllItems() {
   return [keys, items];
 }
 
-export async function setItemsBatch(items) {
-  console.log("----setItemsBatch----", items, db);
-  //   const tx = db.transaction(storeName, "readwrite");
-  //   items.forEach(([key, value]) => {
-  //     tx.store.put(value, key);
-  //   });
-  //   await tx.done;
-}
-
 export async function setItem(key, value) {
   const tx = db.transaction(storeName, "readwrite");
+  // console.log(
+  //   "----setItem key:\r\n",
+  //   uint8ArrayToAsciiString(key),
+  //   "\r\nval:",
+  //   uint8ArrayToAsciiString(value),
+  //   "\r\nraw key:",
+  //   key,
+  //   "\r\nraw val:",
+  //   value
+  // );
   tx.store.put(value, key);
   const result = await tx.done;
-  console.log(
-    "----setItem----key",
-    uint8ArrayToAsciiString(key),
-    "--val--",
-    uint8ArrayToAsciiString(value),
-    result
-  );
+
+  return result;
 }

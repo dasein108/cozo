@@ -25,6 +25,89 @@ import init, { CozoDb } from "cozo-lib-wasm";
 import { parse } from "ansicolor";
 import { saveAs } from "file-saver";
 import { getAllItems } from "./idbUtils";
+import { listPins, testCID, PinTypeEnum } from "./ipfs";
+
+//  [["cid1", "type1", "text1", 100],
+const particleKeys = ["cid", "content_type", "text", "size"];
+const particleKeysStr = particleKeys.join(", ");
+
+/*
+?[cid, content_type, text, size] <- [["cid1", "type1", "text1", 100],
+                                    ["cid2", "type2", "text2", 200],
+                                    ["cid3", "type3", "text3", 300],
+                                    ["cid4", "type4", "text4", 400],
+                                    ["cid5", "type5", "text5", 500],
+                                    ["cid6", "type6", "text6", 600],
+                                    ["cid7", "type7", "text7", 700],
+                                    ["cid8", "type8", "text8", 800],
+                                    ["cid9", "type9", "text9", 900],
+                                    ["cid10", "type10", "text10", 1000]]
+:put particle {cid => content_type, text, size}
+
+*/
+
+const prepareIpfsParticleItem = (ipfsObj) => {
+  const { cid, mime, text, size } = ipfsObj;
+  return `["${cid}", "${mime}", "${text.replace(/"/g, "%20")}", ${size}]`;
+};
+
+const prepareIpfsPinItem = (ipfsObj) => {
+  const { cid, type } = ipfsObj;
+  return `["${cid}", ${PinTypeEnum[type]}]`;
+};
+
+const prepareCozoItems = (array, offset, chunkSize = 10, itemFunc) => {
+  const chunk = array.slice(offset, offset + chunkSize);
+  const chunksAsString = chunk.map(itemFunc).join(", ");
+  return `[${chunksAsString}]`;
+};
+
+const prepareIpfsPinsItems = (array, offset, chunkSize = 10) =>
+  prepareCozoItems(array, offset, chunkSize, prepareIpfsPinItem);
+
+const prepareIpfsParticleItems = (array, offset, chunkSize = 10) =>
+  prepareCozoItems(array, offset, chunkSize, prepareIpfsParticleItem);
+//   const chunk = array.slice(offset, offset + chunkSize);
+//   const chunksAsString = chunk.map(prepareIpfsParticleItem).join(", ");
+//   return `[${chunksAsString}]`;
+// };
+
+const prepareParticlePutCommand = (packedChunks) => {
+  return `?[${particleKeysStr}] <- ${packedChunks}\r\n:put particle {cid => content_type, text, size}`;
+};
+
+const preparePinPutCommand = (packedChunks) => {
+  return `?[cid, type] <- ${packedChunks}\r\n:put pin {cid => type}`;
+};
+
+const iterateByChunk = async (
+  array,
+  iterAction,
+  chunkSize = 50,
+  params = {}
+) => {
+  for (let i = 0; i < array.length; i += chunkSize) {
+    iterAction(array, i, chunkSize);
+  }
+};
+
+const importToCozoDb = async (db, array) => {
+  const chunkSize = 50;
+  console.log("----importToCozoDb----", array.length);
+  for (let i = 0; i < array.length; i += chunkSize) {
+    // const packedItems = prepareIpfsParticleItems(array, i, chunkSize);
+    // const putCommand = prepareParticlePutCommand(packedItems);
+    const packedItems = prepareIpfsPinsItems(array, i, chunkSize);
+    const putCommand = preparePinPutCommand(packedItems);
+    const resStr = db.run(putCommand, "");
+    const res = JSON.parse(resStr);
+    if (res.ok) {
+      console.log("------putCommand OK", i);
+    } else {
+      console.log("------putCommand----", i, putCommand, res);
+    }
+  }
+};
 
 function App() {
   const [db, setDb] = useState(null);
@@ -49,6 +132,23 @@ function App() {
       setDb(db);
     });
   }, []);
+
+  const importIpfs = async () => {
+    console.log("----pins start import----");
+    const pins = await listPins();
+    importToCozoDb(db, pins);
+    console.log("----pins----", pins);
+  };
+
+  const test = async () => {
+    // QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF
+    // QmWzV6ek81vECxEVAAuPDjh2BeypYHPjEHSham8LfxkFs5
+    // QmauXpjVLmLHefuD2A5MK3KKAK5r1bmCd8rWTwtYGuEp5j
+    // QmThdPXV25SBNKFfpgzg4H2itn3azUaPNiYTfmr1GaxrNv
+
+    const cid = "QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF";
+    await testCID(cid);
+  };
 
   const renderCell = (colIdx) => (rowIdx) =>
     <Cell>{displayValue(queryResults.rows[rowIdx][colIdx])}</Cell>;
@@ -101,6 +201,7 @@ function App() {
             const res_str = db.run(query, params);
             const t1 = performance.now();
             const res = JSON.parse(res_str);
+            console.log("query results", res);
             if (res.ok) {
               setStatusMessage(
                 `finished with ${res.rows.length} rows in ${(t1 - t0).toFixed(
@@ -210,6 +311,22 @@ function App() {
             }}
           >
             Params
+          </Button>
+          <Button
+            style={{ marginLeft: 5 }}
+            onClick={() => {
+              importIpfs();
+            }}
+          >
+            Import from IPFS
+          </Button>
+          <Button
+            style={{ marginLeft: 5 }}
+            onClick={() => {
+              test();
+            }}
+          >
+            Test
           </Button>
         </div>
       </div>
