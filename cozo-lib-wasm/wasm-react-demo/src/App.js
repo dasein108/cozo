@@ -25,7 +25,16 @@ import init, { CozoDb } from "cozo-lib-wasm";
 import { parse } from "ansicolor";
 import { saveAs } from "file-saver";
 import { getAllItems } from "./idbUtils";
-import { listPins, testCID, PinTypeEnum } from "./ipfs";
+import {
+  listPins,
+  testCID,
+  PinTypeEnum,
+  listFiles,
+  fileStat,
+  listRefs,
+} from "./ipfs";
+// import { executeGetCommand, init } from "./cozoDb";
+import cozoDb from "./cozoDb";
 
 //  [["cid1", "type1", "text1", 100],
 const particleKeys = ["cid", "content_type", "text", "size"];
@@ -43,12 +52,30 @@ const particleKeysStr = particleKeys.join(", ");
                                     ["cid9", "type9", "text9", 900],
                                     ["cid10", "type10", "text10", 1000]]
 :put particle {cid => content_type, text, size}
+:create particle {
+    cid: String =>
+    mime: String,
+    text: String,
+    size: Int,
+    block_size: Int
+}
 
+     cid: cid.toString(),
+      type,
+      size,
+      local,
+      sizeLocal,
+      blocks,
+      mime,
+      text,
 */
 
 const prepareIpfsParticleItem = (ipfsObj) => {
-  const { cid, mime, text, size } = ipfsObj;
-  return `["${cid}", "${mime}", "${text.replace(/"/g, "%20")}", ${size}]`;
+  const { cid, type, size, local, sizeLocal, blocks, mime, text } = ipfsObj;
+  return `["${cid}", "${type}", ${size}, ${sizeLocal}, ${blocks}, "${mime}", "${text.replace(
+    /"/g,
+    "%20"
+  )}"]`;
 };
 
 const prepareIpfsPinItem = (ipfsObj) => {
@@ -73,7 +100,7 @@ const prepareIpfsParticleItems = (array, offset, chunkSize = 10) =>
 // };
 
 const prepareParticlePutCommand = (packedChunks) => {
-  return `?[${particleKeysStr}] <- ${packedChunks}\r\n:put particle {cid => content_type, text, size}`;
+  return `?[cid, type, size, sizeLocal, blocks, mime, text] <- ${packedChunks}\r\n:put particle {cid => type, size, sizeLocal, blocks, mime, text}`;
 };
 
 const preparePinPutCommand = (packedChunks) => {
@@ -95,10 +122,10 @@ const importToCozoDb = async (db, array) => {
   const chunkSize = 50;
   console.log("----importToCozoDb----", array.length);
   for (let i = 0; i < array.length; i += chunkSize) {
-    // const packedItems = prepareIpfsParticleItems(array, i, chunkSize);
-    // const putCommand = prepareParticlePutCommand(packedItems);
-    const packedItems = prepareIpfsPinsItems(array, i, chunkSize);
-    const putCommand = preparePinPutCommand(packedItems);
+    const packedItems = prepareIpfsParticleItems(array, i, chunkSize);
+    const putCommand = prepareParticlePutCommand(packedItems);
+    // const packedItems = prepareIpfsPinsItems(array, i, chunkSize);
+    // const putCommand = preparePinPutCommand(packedItems);
     const resStr = db.run(putCommand, "");
     const res = JSON.parse(resStr);
     if (res.ok) {
@@ -121,23 +148,56 @@ function App() {
   const [queryId, setQueryId] = useState(0);
 
   useEffect(() => {
-    init().then(() => {
-      let db = CozoDb.new();
-      window.db = db;
-      const init = async () => {
-        const [keys, values] = await getAllItems();
-        db.import_from_indexdb(keys, values);
-      };
-      init();
+    cozoDb.init().then((db) => {
       setDb(db);
+      const res = cozoDb.executeGetCommand("pin");
+      console.log("----cc", cozoDb, res);
     });
+
+    // init().then(() => {
+    //   let db = CozoDb.new();
+    //   window.db = db;
+    //   const init = async () => {
+    //     const [keys, values] = await getAllItems();
+    //     db.import_from_indexdb(keys, values);
+    //   };
+    //   init();
+    //   setDb(db);
+    // });
   }, []);
 
   const importIpfs = async () => {
     console.log("----pins start import----");
-    const pins = await listPins();
-    importToCozoDb(db, pins);
-    console.log("----pins----", pins);
+    // const pins = await listPins();
+    // cozoDb.executeBatchPutCommand("pin", pins, 100);
+    // const pinsDataTable = cozoDb.executeGetCommand("pin");
+    // const { cid: cidIdx, type: typeIdx } = pinsDataTable.index;
+    // const recursivePinCids = pinsDataTable.rows
+    //   .filter((row) => row[typeIdx] === PinTypeEnum.recursive)
+    //   .map((row) => row[cidIdx]);
+
+    // console.log("----pins----", recursivePinCids);
+    // const files = await listFiles();
+    // files.forEach(async (file) => {
+    //   const result = cozoDb.executePutCommand("particle", [file]);
+    //   console.log("----put particle----", result);
+    // });
+
+    const particlesDataTable = cozoDb.executeGetCommand("particle", [
+      "blocks > 0",
+    ]);
+    particlesDataTable.rows
+      .map((p) => p[particlesDataTable.index.cid])
+      .forEach(async (cid) => {
+        const refs = await listRefs(cid);
+        const refsItems = refs.map((child) => ({
+          parent: cid,
+          child,
+        }));
+
+        const result = cozoDb.executePutCommand("refs", refsItems);
+        console.log("----refs---- result", result);
+      });
   };
 
   const test = async () => {

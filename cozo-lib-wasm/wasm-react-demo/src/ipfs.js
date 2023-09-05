@@ -69,7 +69,7 @@ export const listPins = async () => {
 };
 
 export const listFiles = async () => {
-  const pinsIterable = node.pin.ls();
+  const pinsIterable = node.pin.ls({ type: "recursive" });
 
   // return pins.map((pin) => {
   const result = [];
@@ -80,72 +80,8 @@ export const listFiles = async () => {
     if (count % 100 === 0) {
       console.log("pin ls", count);
     }
-    // if (count > 10) {
-    //   break;
-    // }
-    // console.log("----PIN1", pin);
     const { cid } = pin;
-    // if (pin.type === "recursive") {
-    //   console.log("----PIN recursive", pin.cid.toString());
-    // }
-    // if (pin.type === "indirect") {
-    //   console.log("----PIN indirect", pin.cid.toString());
-    // }
-    // if (
-    //   [
-    //     "QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF",
-    //     "QmThdPXV25SBNKFfpgzg4H2itn3azUaPNiYTfmr1GaxrNv",
-    //     "QmauXpjVLmLHefuD2A5MK3KKAK5r1bmCd8rWTwtYGuEp5j",
-    //     "QmWzV6ek81vECxEVAAuPDjh2BeypYHPjEHSham8LfxkFs5",
-    //     "QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF",
-    //   ].indexOf(cid.toString()) !== -1
-    // ) {
-    //   console.log("----PIN", pin);
-    //   debugger;
-    // }
-    const path = `/ipfs/${cid}`;
-    const info = await node.files.stat(path, {
-      withLocal: true,
-      size: true,
-    });
-
-    const { type, size, local, blocks, cumulativeSize } = info;
-
-    let text = "";
-    let mime = "";
-    if (type !== "directory") {
-      const { value: firstChunk } = await node
-        .cat(path, { length: 512, offset: 0 })
-        [Symbol.asyncIterator]()
-        .next();
-
-      mime = await getMimeFromUint8Array(firstChunk);
-      if (!mime) {
-        mime = "unknown";
-        text = "";
-        console.log("----no mime", info);
-      } else {
-        text =
-          mime.indexOf("text/plain") !== -1
-            ? uint8ArrayToAsciiString(firstChunk)
-            : "";
-      }
-    } else {
-      mime = "directory";
-    }
-
-    // console.log(
-    //   `Pinned ${cid}: ${path} ${type} ${size}/${cumulativeSize} ${local} ${blocks} ${mime} ${text}`
-    // );
-    result.push({
-      cid: cid.toString(),
-      type,
-      size,
-      local,
-      blocks,
-      mime,
-      text,
-    });
+    result.push(fileStat(cid.toString()));
   }
 
   return result;
@@ -155,4 +91,65 @@ export const listFiles = async () => {
   //     withLocal: true,
   //     size: true,
   //   });
+};
+
+export const addMimeAndText = async (path, info) => {
+  const { cid, type, size, local, blocks, sizeLocal } = info;
+
+  let text = "";
+  let mime = "";
+  if (type !== "directory") {
+    const { value: firstChunk } = await node
+      .cat(path, { length: 512, offset: 0 })
+      [Symbol.asyncIterator]()
+      .next();
+
+    console.log("----fileStat----", firstChunk, info);
+
+    mime = await getMimeFromUint8Array(firstChunk);
+    if (!mime) {
+      mime = "unknown";
+      text = "";
+      console.log("----no mime", info);
+    } else {
+      text =
+        mime.indexOf("text/plain") !== -1
+          ? uint8ArrayToAsciiString(firstChunk)
+          : "";
+    }
+  } else {
+    mime = "";
+  }
+  return {
+    cid: cid.toString(),
+    type,
+    size,
+    local,
+    sizeLocal,
+    blocks,
+    mime,
+    text,
+  };
+};
+
+export const fileStat = async (cid) => {
+  const path = `/ipfs/${cid}`;
+  return node.files
+    .stat(path, {
+      withLocal: true,
+      size: true,
+    })
+    .then((info) => {
+      return addMimeAndText(path, info);
+    });
+};
+
+export const listRefs = async (cid) => {
+  const path = `/ipfs/${cid}`;
+  const refsIterable = node.refs(path, { recursive: true });
+  const refs = [];
+  for await (const refItem of refsIterable) {
+    refs.push(refItem.ref);
+  }
+  return refs;
 };
