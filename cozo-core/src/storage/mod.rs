@@ -48,8 +48,6 @@ pub trait Storage<'s>: Send + Sync + Clone {
         data: Box<dyn Iterator<Item = Result<(Vec<u8>, Vec<u8>)>> + 'a>,
     ) -> Result<()>;
 
-    fn  import_from_indexdb(&'s mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool>;
-
 }
 
 /// Trait for the associated transaction type of a storage engine.

@@ -54,7 +54,7 @@ pub use runtime::db::Db;
 pub use runtime::db::NamedRows;
 pub use runtime::relation::decode_tuple_from_kv;
 pub use runtime::temp_store::RegularTempStore;
-pub use storage::mem::{new_cozo_mem, MemStorage};
+pub use storage::mem::{new_cozo_mem, new_cozo_indexed_db, MemStorage};
 #[cfg(feature = "storage-rocksdb")]
 pub use storage::rocks::{new_cozo_rocksdb, RocksDbStorage};
 #[cfg(feature = "storage-sled")]
@@ -162,6 +162,11 @@ impl DbInstance {
             ),
         })
     }
+
+    pub fn new_from_indexed_db(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<Self> {
+        Ok(Self::Mem(new_cozo_indexed_db(keys, values)?))
+    }
+
     /// Same as [Self::new], but inputs and error messages are all in strings
     pub fn new_with_str(
         engine: &str,
@@ -510,13 +515,6 @@ impl DbInstance {
         MultiTransaction {
             sender: app2db_send,
             receiver: db2app_recv,
-        }
-    }
-
-    pub fn import_from_indexdb(&mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
-        match self {
-            DbInstance::Mem(db) => db.import_from_indexdb(keys, values),
-            _ => panic!("import_from_indexdb is only supported for mem storage"),
         }
     }
 }

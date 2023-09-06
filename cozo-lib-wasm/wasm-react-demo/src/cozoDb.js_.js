@@ -1,7 +1,7 @@
 import initCozoDb, { CozoDb } from "cozo-lib-wasm";
-import { getAllItems } from "./idbUtils";
+import { openDB } from "idb";
 
-let db = undefined;
+// import { getAllItems } from "./idbUtils";
 
 const initializeScript = `
 {
@@ -35,16 +35,66 @@ const initializeScript = `
     }
 }`;
 
-// const initializeScript = `
-// {
-//     :create pin {
-//         cid: String =>
-//         type: Int
-//     }
-// }`;
-
 function DbService() {
   let dbSchema = {};
+  let db = undefined;
+  let indexedDb = undefined;
+
+  async function openIndexedDB() {
+    const dbName = "cozo-idb";
+    const tableNames = Object.keys(dbSchema);
+    try {
+      db = await openDB(dbName, 1, {
+        upgrade(db) {
+          //   db.createObjectStore("tables", { keyPath: "name" });
+
+          tableNames.forEach(async (tableName) => {
+            const { keys } = dbSchema[tableName];
+            const result = db.createObjectStore(tableName, { keyPath: keys });
+            console.log("DbService create table", result);
+          });
+        },
+      });
+
+      // Init tables
+      //   const tx = db.transaction("tables", "readwrite");
+      //   tableNames.forEach(async (tableName) => {
+      //     const { columns } = dbSchema[tableName];
+      //     tx.store.add({ name: tableName, columns: Object.keys(columns) });
+      //   });
+
+      //   await tx.done;
+
+      return db;
+    } catch (error) {
+      console.log("Error opening database", error);
+      // return null;
+    }
+  }
+
+  function loadCozoDbSchemaMappings() {
+    const relationsDataTable = runCommand("::relations");
+    const tableNames = relationsDataTable.rows.map((row) => row[0]);
+
+    const shemaMappings = Object.fromEntries(
+      tableNames.map((tableName) => {
+        const fields = mapResultToList(runCommand(`::columns ${tableName}`));
+        const keys = fields.filter((c) => c.is_key).map((c) => c.column);
+        const values = fields.filter((c) => !c.is_key).map((c) => c.column);
+        const tableSchema = {
+          keys,
+          values,
+          columns: fields.reduce((obj, field) => {
+            obj[field.column] = field;
+            return obj;
+          }, {}),
+        };
+        return [tableName, tableSchema];
+      })
+    );
+
+    return shemaMappings;
+  }
 
   async function init() {
     if (db) {
@@ -52,36 +102,32 @@ function DbService() {
     }
 
     await initCozoDb();
-    const [keys, values] = await getAllItems();
+    window.db = db = CozoDb.new();
+    // window.db = db;
 
-    db = CozoDb.new(keys, values);
-    window.db = db;
+    // Apply default schema
+    console.log("DbService apply schema", runCommand(initializeScript));
 
-    // Init Db Schema
-    dbSchema = initDbSchema();
+    // Load schema mappings
+    dbSchema = loadCozoDbSchemaMappings();
     console.log("DBSchema", dbSchema);
+
+    indexedDb = await openIndexedDB();
+
+    // await syncWithIndexedDB();
+    // Init Db Schema
+    // dbSchema = initDbSchema();
 
     return db;
   }
 
+  //   {"particle":{"headers":["cid","mime","text","blocks","size","sizeLocal","type"],"next":null,"rows":[[]]}}
+
   const initDbSchema = () => {
-    let relationsDataTable = runCommand("::relations");
-
-    // TODO: refact
-    if (relationsDataTable.rows.length === 0) {
-      runCommand(initializeScript);
-      relationsDataTable = runCommand("::relations");
-
-      //   const res = runCommand(
-      //     '?[cid, type] <- [["cid1", 0]]\r\n:put pin {cid => type}'
-      //   );
-      //   console.log("--!! insert pin", res);
-    }
-
-    const tableNames = relationsDataTable.rows.map((row) => row[0]);
+    const tables = ["pin", "particle", "refs", "links"];
 
     const schemas = Object.fromEntries(
-      tableNames.map((table) => {
+      tables.map((table) => {
         const fields = mapResultToList(runCommand(`::columns ${table}`));
         const keys = fields.filter((c) => c.is_key).map((c) => c.column);
         const values = fields.filter((c) => !c.is_key).map((c) => c.column);
@@ -138,13 +184,12 @@ function DbService() {
   };
 
   const runCommand = (command) => {
-    const resultStr = db.run(command, "");
+    const resultStr = window.db.run(command, "");
     const result = JSON.parse(resultStr);
+    if (result.code) {
+      return { error: result.display };
+    }
     console.log("----runCommand----", command, result);
-
-    // if (result.code) {
-    //   return { error: result.display };
-    // }
 
     return result;
   };
@@ -162,6 +207,7 @@ function DbService() {
     const tableSchema = dbSchema[tableName];
     const colKeys = Object.keys(tableSchema.columns);
     const colValues = Object.values(tableSchema.columns);
+
     return `?[${colKeys.join(", ")}] <- [${items
       .map((item) => mapObjectToArray(item, colValues))
       .join(", ")}]`;

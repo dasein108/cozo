@@ -63,7 +63,7 @@ export const listPins = async () => {
     // }
     // console.log("----PIN1", pin);
     const { cid, type } = pin;
-    result.push({ cid: cid.toString(), type });
+    result.push({ cid: cid.toString(), type: PinTypeEnum[type] });
   }
   return result;
 };
@@ -134,14 +134,52 @@ export const addMimeAndText = async (path, info) => {
 
 export const fileStat = async (cid) => {
   const path = `/ipfs/${cid}`;
-  return node.files
-    .stat(path, {
-      withLocal: true,
-      size: true,
-    })
-    .then((info) => {
-      return addMimeAndText(path, info);
-    });
+  const info = await node.files.stat(path, {
+    withLocal: true,
+    size: true,
+  });
+
+  return info;
+};
+
+export const catByInfo = async (info) => {
+  const { cid, type } = info;
+  const path = `/ipfs/${cid}`;
+
+  let text = "";
+  let mime = "";
+  if (type !== "directory") {
+    const { value: firstChunk } = await node
+      .cat(path, { length: 256, offset: 0 })
+      [Symbol.asyncIterator]()
+      .next();
+
+    mime = await getMimeFromUint8Array(firstChunk);
+    if (!mime) {
+      mime = "unknown";
+      text = "";
+    } else {
+      text =
+        mime.indexOf("text/plain") !== -1
+          ? uint8ArrayToAsciiString(firstChunk)
+          : "";
+    }
+  } else {
+    mime = "";
+  }
+
+  return { ...info, mime, text };
+};
+
+export const processByBatches = async (items, processFn, batchSize = 10) => {
+  const result = [];
+  for (let i = 0; i < items.length; i += batchSize) {
+    const batch = items.slice(i, i + batchSize);
+    const batchResult = await Promise.all(batch.map((item) => processFn(item)));
+    result.push(...batchResult);
+  }
+
+  return result;
 };
 
 export const listRefs = async (cid) => {

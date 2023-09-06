@@ -49,10 +49,11 @@ fn convert_to_vec_of_vecs(arr: Array) -> Vec<Vec<u8>> {
 #[wasm_bindgen]
 impl CozoDb {
     #[allow(clippy::new_without_default)]
-    pub fn new() -> Self {
+    pub fn new( keys: Array, values: Array) -> Self {
         utils::set_panic_hook();
+        //TODO: keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>
         log("starting cozodb...");
-        let db = DbInstance::new("mem", "", "").unwrap();
+        let db = DbInstance::new_from_indexed_db(convert_to_vec_of_vecs(keys), convert_to_vec_of_vecs(values)).unwrap();
         Self { db }
     }
     pub fn run(&self, script: &str, params: &str, immutable: bool) -> String {
@@ -64,10 +65,5 @@ impl CozoDb {
     }
     pub fn import_relations(&self, data: &str) -> String {
         self.db.import_relations_str(data)
-    }
-
-    pub fn import_from_indexdb(&mut self, keys: Array, values: Array) -> bool {
-        self.db.import_from_indexdb(convert_to_vec_of_vecs(keys), convert_to_vec_of_vecs(values));
-        true
     }
 }

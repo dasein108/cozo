@@ -47,6 +47,7 @@ use crate::query::ra::{
     FilteredRA, FtsSearchRA, HnswSearchRA, InnerJoin, LshSearchRA, NegJoin, RelAlgebra, ReorderRA,
     StoredRA, StoredWithValidityRA, TempStoreRA, UnificationRA,
 };
+
 #[allow(unused_imports)]
 use crate::runtime::callback::{
     CallbackCollector, CallbackDeclaration, CallbackOp, EventCallbackRegistry,
@@ -371,10 +372,6 @@ impl<'s, S: Storage<'s>> Db<S> {
                 }
             }
         }
-    }
-
-    pub fn import_from_indexdb(&'s mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
-        self.db.import_from_indexdb(keys, values)
     }
 
     /// Run the CozoScript passed in. The `params` argument is a map of parameters.

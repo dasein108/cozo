@@ -28,8 +28,6 @@ use crate::utils::swap_option_result;
 use wasm_bindgen::prelude::*;
 
 use js_sys::Uint8Array;
-use serde::{Serialize, Deserialize};
-
 
 // Next let's define a macro that's like `println!`, only it works for
 // `console.log`. Note that `println!` doesn't actually work on the wasm target
@@ -45,9 +43,8 @@ extern "C" {
     pub fn log(s: &str);
 }
 
-#[wasm_bindgen(raw_module = "../../src/idbsUtils.js")]
+#[wasm_bindgen(raw_module = "../../src/idbUtils.js")]
 extern "C" {
-    fn openDatabase() -> js_sys::Promise;
     fn setItem(key: &JsValue, value: &JsValue) -> js_sys::Promise;
 }
 
@@ -62,10 +59,40 @@ pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
     Ok(ret)
 }
 
+/// Create a database backed by memory.
+/// This is the fastest storage, but non-persistent.
+/// Supports concurrent readers but only a single writer.
+pub fn new_cozo_indexed_db(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<crate::Db<MemStorage>> {
+    let storage = MemStorage::new(keys, values);
+    let ret = crate::Db::new(storage)?;
+
+    ret.initialize()?;
+    Ok(ret)
+}
+
 /// The non-persistent storage
 #[derive(Default, Clone)]
 pub struct MemStorage {
     store: Arc<ShardedLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
+}
+
+impl MemStorage {
+    pub fn new(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Self {
+        console_log!("Import from indexDB {:?} {:?}", keys, values);
+        let mut store_snap: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
+
+
+        for (key, value) in keys.into_iter().zip(values.into_iter()) {
+            store_snap.insert(key, value);
+        }
+        console_log!("MemStorage  value {:?}", store_snap);
+
+        let store: Arc<ShardedLock<BTreeMap<Vec<u8>, Vec<u8>>>> = Arc::new(ShardedLock::new(store_snap));
+
+        Self {
+            store
+        }
+    }
 }
 
 impl<'s> Storage<'s> for MemStorage {
@@ -73,18 +100,6 @@ impl<'s> Storage<'s> for MemStorage {
 
     fn storage_kind(&self) -> &'static str {
         "mem"
-    }
-
-    fn import_from_indexdb(&'s mut self, keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<bool> {
-        console_log!("Import from indexDB {:?} {:?}", keys, values);
-        let mut store = self.store.write().unwrap();
-
-        for (key, value) in keys.into_iter().zip(values.into_iter()) {
-            store.insert(key, value);
-        }
-        console_log!("MemStorage  value {:?}", self.store);
-
-        Ok(true)
     }
 
     fn transact(&'s self, write: bool) -> Result<Self::Tx> {

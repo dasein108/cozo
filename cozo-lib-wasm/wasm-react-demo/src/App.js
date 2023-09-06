@@ -32,115 +32,19 @@ import {
   listFiles,
   fileStat,
   listRefs,
+  processByBatches,
+  catByInfo,
 } from "./ipfs";
 // import { executeGetCommand, init } from "./cozoDb";
 import cozoDb from "./cozoDb";
-
-//  [["cid1", "type1", "text1", 100],
-const particleKeys = ["cid", "content_type", "text", "size"];
-const particleKeysStr = particleKeys.join(", ");
-
-/*
-?[cid, content_type, text, size] <- [["cid1", "type1", "text1", 100],
-                                    ["cid2", "type2", "text2", 200],
-                                    ["cid3", "type3", "text3", 300],
-                                    ["cid4", "type4", "text4", 400],
-                                    ["cid5", "type5", "text5", 500],
-                                    ["cid6", "type6", "text6", 600],
-                                    ["cid7", "type7", "text7", 700],
-                                    ["cid8", "type8", "text8", 800],
-                                    ["cid9", "type9", "text9", 900],
-                                    ["cid10", "type10", "text10", 1000]]
-:put particle {cid => content_type, text, size}
-:create particle {
-    cid: String =>
-    mime: String,
-    text: String,
-    size: Int,
-    block_size: Int
-}
-
-     cid: cid.toString(),
-      type,
-      size,
-      local,
-      sizeLocal,
-      blocks,
-      mime,
-      text,
-*/
-
-const prepareIpfsParticleItem = (ipfsObj) => {
-  const { cid, type, size, local, sizeLocal, blocks, mime, text } = ipfsObj;
-  return `["${cid}", "${type}", ${size}, ${sizeLocal}, ${blocks}, "${mime}", "${text.replace(
-    /"/g,
-    "%20"
-  )}"]`;
-};
-
-const prepareIpfsPinItem = (ipfsObj) => {
-  const { cid, type } = ipfsObj;
-  return `["${cid}", ${PinTypeEnum[type]}]`;
-};
-
-const prepareCozoItems = (array, offset, chunkSize = 10, itemFunc) => {
-  const chunk = array.slice(offset, offset + chunkSize);
-  const chunksAsString = chunk.map(itemFunc).join(", ");
-  return `[${chunksAsString}]`;
-};
-
-const prepareIpfsPinsItems = (array, offset, chunkSize = 10) =>
-  prepareCozoItems(array, offset, chunkSize, prepareIpfsPinItem);
-
-const prepareIpfsParticleItems = (array, offset, chunkSize = 10) =>
-  prepareCozoItems(array, offset, chunkSize, prepareIpfsParticleItem);
-//   const chunk = array.slice(offset, offset + chunkSize);
-//   const chunksAsString = chunk.map(prepareIpfsParticleItem).join(", ");
-//   return `[${chunksAsString}]`;
-// };
-
-const prepareParticlePutCommand = (packedChunks) => {
-  return `?[cid, type, size, sizeLocal, blocks, mime, text] <- ${packedChunks}\r\n:put particle {cid => type, size, sizeLocal, blocks, mime, text}`;
-};
-
-const preparePinPutCommand = (packedChunks) => {
-  return `?[cid, type] <- ${packedChunks}\r\n:put pin {cid => type}`;
-};
-
-const iterateByChunk = async (
-  array,
-  iterAction,
-  chunkSize = 50,
-  params = {}
-) => {
-  for (let i = 0; i < array.length; i += chunkSize) {
-    iterAction(array, i, chunkSize);
-  }
-};
-
-const importToCozoDb = async (db, array) => {
-  const chunkSize = 50;
-  console.log("----importToCozoDb----", array.length);
-  for (let i = 0; i < array.length; i += chunkSize) {
-    const packedItems = prepareIpfsParticleItems(array, i, chunkSize);
-    const putCommand = prepareParticlePutCommand(packedItems);
-    // const packedItems = prepareIpfsPinsItems(array, i, chunkSize);
-    // const putCommand = preparePinPutCommand(packedItems);
-    const resStr = db.run(putCommand, "");
-    const res = JSON.parse(resStr);
-    if (res.ok) {
-      console.log("------putCommand OK", i);
-    } else {
-      console.log("------putCommand----", i, putCommand, res);
-    }
-  }
-};
 
 function App() {
   const [db, setDb] = useState(null);
   const [params, setParams] = useState("{}");
   const [showParams, setShowParams] = useState(false);
-  const [queryText, setQueryText] = useState("");
+  const [queryText, setQueryText] = useState(
+    "#?[uid, mood] := *status{uid, mood}\r\n?[type,  cid] := *pin{cid, type}"
+  );
   const [inProgress, setInProgress] = useState(false);
   const [statusMessage, setStatusMessage] = useState("");
   const [errorMessage, setErrorMessage] = useState([]);
@@ -150,8 +54,8 @@ function App() {
   useEffect(() => {
     cozoDb.init().then((db) => {
       setDb(db);
-      const res = cozoDb.executeGetCommand("pin");
-      console.log("----cc", cozoDb, res);
+      // const res = cozoDb.executeGetCommand("pin");
+      // console.log("----cc", cozoDb, res);
     });
 
     // init().then(() => {
@@ -167,25 +71,31 @@ function App() {
   }, []);
 
   const importIpfs = async () => {
+    console.time("Import Ipfs");
     console.log("----pins start import----");
-    // const pins = await listPins();
-    // cozoDb.executeBatchPutCommand("pin", pins, 100);
-    // const pinsDataTable = cozoDb.executeGetCommand("pin");
-    // const { cid: cidIdx, type: typeIdx } = pinsDataTable.index;
-    // const recursivePinCids = pinsDataTable.rows
-    //   .filter((row) => row[typeIdx] === PinTypeEnum.recursive)
-    //   .map((row) => row[cidIdx]);
+    const pins = await listPins(); //.slice(0, 100);
+    cozoDb.executeBatchPutCommand("pin", pins, 100);
+    const pinsDataTable = cozoDb.executeGetCommand("pin");
+    const { cid: cidIdx, type: typeIdx } = pinsDataTable.index;
+    const recursivePinCids = pinsDataTable.rows
+      .filter((row) => row[typeIdx] === PinTypeEnum.recursive)
+      .map((row) => row[cidIdx]);
+    const files = await processByBatches(recursivePinCids, fileStat, 10);
+    console.log("----files  import----", files);
+    const particles = await processByBatches(files, catByInfo, 10);
+    console.log("----particles  import----", particles);
+    cozoDb.executeBatchPutCommand("particle", particles, 10);
 
-    // console.log("----pins----", recursivePinCids);
     // const files = await listFiles();
     // files.forEach(async (file) => {
-    //   const result = cozoDb.executePutCommand("particle", [file]);
+    //   const result = cozoDb.executePutCommand("particle", [await file]);
     //   console.log("----put particle----", result);
     // });
 
     const particlesDataTable = cozoDb.executeGetCommand("particle", [
       "blocks > 0",
     ]);
+    console.log("------particlesDataTable----", particlesDataTable);
     particlesDataTable.rows
       .map((p) => p[particlesDataTable.index.cid])
       .forEach(async (cid) => {
@@ -198,6 +108,7 @@ function App() {
         const result = cozoDb.executePutCommand("refs", refsItems);
         console.log("----refs---- result", result);
       });
+    console.timeEnd("Import Ipfs");
   };
 
   const test = async () => {
@@ -206,8 +117,15 @@ function App() {
     // QmauXpjVLmLHefuD2A5MK3KKAK5r1bmCd8rWTwtYGuEp5j
     // QmThdPXV25SBNKFfpgzg4H2itn3azUaPNiYTfmr1GaxrNv
 
-    const cid = "QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF";
-    await testCID(cid);
+    // const cid = "QmcbHtxXUnRnsmSBwLfUFbyRAekZjgdpYtgaGdZCEr3fdF";
+    // await testCID(cid);
+    const res = cozoDb.runCommand(
+      ":create status {uid: String => mood: String}"
+    );
+    const res2 = cozoDb.runCommand(
+      '?[uid, mood] <- [["aaa", "vvvv"]]\r\n:put status {uid => mood}'
+    );
+    console.log("--!! Create status and insert", res, res2);
   };
 
   const renderCell = (colIdx) => (rowIdx) =>
@@ -258,9 +176,10 @@ function App() {
         setTimeout(() => {
           try {
             const t0 = performance.now();
-            const res_str = db.run(query, params);
+            // const res_str = db.run(query, params);
             const t1 = performance.now();
-            const res = JSON.parse(res_str);
+            // const res = JSON.parse(res_str);
+            const res = cozoDb.runCommand(query, params);
             console.log("query results", res);
             if (res.ok) {
               setStatusMessage(
@@ -298,6 +217,7 @@ function App() {
     }
   }
 
+  console.log("0-errr", errorMessage);
   return (
     <div
       style={{
