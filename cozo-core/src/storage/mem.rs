@@ -25,6 +25,31 @@ use crate::runtime::relation::{decode_tuple_from_kv, extend_tuple_from_v};
 use crate::storage::{Storage, StoreTx};
 use crate::utils::swap_option_result;
 
+use wasm_bindgen::prelude::*;
+
+use js_sys::Uint8Array;
+
+
+#[wasm_bindgen]
+extern "C" {
+    #[wasm_bindgen(js_namespace = console)]
+    pub fn log(s: &str);
+}
+
+// Next let's define a macro that's like `println!`, only it works for
+// `console.log`. Note that `println!` doesn't actually work on the wasm target
+// because the standard library currently just eats all output. To get
+// `println!`-like behavior in your app you'll likely want a macro like this.
+macro_rules! console_log {
+    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
+}
+
+#[wasm_bindgen(raw_module = "./indexeddb.js")]
+extern "C" {
+    fn saveToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
+}
+
+
 /// Create a database backed by memory.
 /// This is the fastest storage, but non-persistent.
 /// Supports concurrent readers but only a single writer.
@@ -39,6 +64,15 @@ pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
 #[derive(Default, Clone)]
 pub struct MemStorage {
     store: Arc<ShardedLock<BTreeMap<Vec<u8>, Vec<u8>>>>,
+}
+
+impl MemStorage {
+    /// Create a new memory storage, with the given initial data
+    pub fn new(snap:  BTreeMap<Vec<u8>, Vec<u8>>) -> Self {
+        Self {
+            store: Arc::new(ShardedLock::new(snap))
+        }
+    }
 }
 
 impl<'s> Storage<'s> for MemStorage {
@@ -71,8 +105,11 @@ impl<'s> Storage<'s> for MemStorage {
             let (k, v) = pair?;
             store.insert(k, v);
         }
+
         Ok(())
     }
+
+
 }
 
 pub enum MemTx<'s> {
@@ -155,19 +192,32 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
         })
     }
 
+    #[allow(unused_must_use)]
     fn commit(&mut self) -> Result<()> {
         match self {
             MemTx::Reader(_) => Ok(()),
             MemTx::Writer(wtr, cached) => {
                 let mut cache = BTreeMap::default();
                 mem::swap(&mut cache, cached);
+                console_log!("commit {:?}", cache.len());
+
                 for (k, mv) in cache {
+                    let key_js_value = Uint8Array::from(&k[..]).into();
+
                     match mv {
                         None => {
                             wtr.remove(&k);
+                            // sync with indexedDb
+                            saveToIndexedDb(&key_js_value, &JsValue::null());
+
                         }
                         Some(v) => {
-                            wtr.insert(k, v);
+                            wtr.insert(k, v.clone());
+
+                            // sync with indexedDb
+                            let value_js_value = Uint8Array::from(&v[..]).into();
+                            saveToIndexedDb(&key_js_value, &value_js_value);
+
                         }
                     }
                 }
