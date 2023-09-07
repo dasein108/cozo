@@ -1,5 +1,4 @@
 import initCozoDb, { CozoDb } from "cozo-lib-wasm";
-import { getAllItems } from "./idbUtils";
 
 let db = undefined;
 
@@ -50,11 +49,14 @@ function DbService() {
     if (db) {
       return db;
     }
+    console.log("----initCozoDb----1111");
 
-    await initCozoDb();
-    const [keys, values] = await getAllItems();
-
-    db = CozoDb.new(keys, values);
+    const input = await initCozoDb();
+    console.log("----initCozoDb----input", input);
+    // const [keys, values] = await getAllItems();
+    db = await CozoDb.new_from_indexed_db("cozo-idb", "cyb-cozo");
+    console.log("----initCozoDb----", db);
+    // db = CozoDb.new(keys, values);
     window.db = db;
 
     // Init Db Schema

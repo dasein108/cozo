@@ -43,9 +43,9 @@ extern "C" {
     pub fn log(s: &str);
 }
 
-#[wasm_bindgen(raw_module = "../../src/idbUtils.js")]
+#[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
-    fn setItem(key: &JsValue, value: &JsValue) -> js_sys::Promise;
+    fn saveToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
 }
 
 
@@ -60,12 +60,10 @@ pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
 }
 
 /// Create a database backed by memory.
-/// This is the fastest storage, but non-persistent.
-/// Supports concurrent readers but only a single writer.
+/// With persistent storage loaded from key-values.
 pub fn new_cozo_indexed_db(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<crate::Db<MemStorage>> {
     let storage = MemStorage::new(keys, values);
     let ret = crate::Db::new(storage)?;
-
     ret.initialize()?;
     Ok(ret)
 }
@@ -77,6 +75,7 @@ pub struct MemStorage {
 }
 
 impl MemStorage {
+    /// Create a new memory storage, with the given initial data
     pub fn new(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Self {
         console_log!("Import from indexDB {:?} {:?}", keys, values);
         let mut store_snap: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
@@ -125,6 +124,7 @@ impl<'s> Storage<'s> for MemStorage {
             let (k, v) = pair?;
             store.insert(k, v);
         }
+
         Ok(())
     }
 
@@ -211,6 +211,7 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
         })
     }
 
+    #[allow(unused_must_use)]
     fn commit(&mut self) -> Result<()> {
         match self {
             MemTx::Reader(_) => Ok(()),
@@ -225,14 +226,16 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
                     match mv {
                         None => {
                             wtr.remove(&k);
-                            setItem(&key_js_value, &JsValue::null());
+                            // sync with indexedDb
+                            saveToIndexedDb(&key_js_value, &JsValue::null());
 
                         }
                         Some(v) => {
                             wtr.insert(k, v.clone());
-                            let value_js_value = Uint8Array::from(&v[..]).into();
 
-                            setItem(&key_js_value, &value_js_value);
+                            // sync with indexedDb
+                            let value_js_value = Uint8Array::from(&v[..]).into();
+                            saveToIndexedDb(&key_js_value, &value_js_value);
 
                         }
                     }

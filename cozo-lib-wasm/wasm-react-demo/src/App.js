@@ -21,10 +21,9 @@ import {
 } from "@blueprintjs/core";
 import { Cell, Column, Table2 } from "@blueprintjs/table";
 import React, { useEffect, useState } from "react";
-import init, { CozoDb } from "cozo-lib-wasm";
+// import init, { CozoDb } from "cozo-lib-wasm";
 import { parse } from "ansicolor";
 import { saveAs } from "file-saver";
-import { getAllItems } from "./idbUtils";
 import {
   listPins,
   testCID,
@@ -57,7 +56,6 @@ function App() {
       // const res = cozoDb.executeGetCommand("pin");
       // console.log("----cc", cozoDb, res);
     });
-
     // init().then(() => {
     //   let db = CozoDb.new();
     //   window.db = db;
@@ -158,7 +156,8 @@ function App() {
   }
 
   function handleQuery() {
-    if (!db || inProgress) {
+    if (inProgress) {
+      //!db ||
       setInProgress(false);
       setErrorMessage([]);
       setStatusMessage(["database not ready"]);
@@ -265,7 +264,8 @@ function App() {
                 : "Loading WASM ..."
             }
             onClick={() => handleQuery()}
-            disabled={!db || inProgress}
+            disabled={inProgress}
+            // !db ||
             intent={Intent.PRIMARY}
           />
           &nbsp;

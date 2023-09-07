@@ -1,8 +1,6 @@
 import initCozoDb, { CozoDb } from "cozo-lib-wasm";
 import { openDB } from "idb";
 
-// import { getAllItems } from "./idbUtils";
-
 const initializeScript = `
 {
     :create pin {
