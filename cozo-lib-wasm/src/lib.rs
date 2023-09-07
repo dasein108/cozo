@@ -73,13 +73,14 @@ impl CozoDb {
 
         match result.dyn_into::<js_sys::Array>() {
             Ok(array) => {
-                let keys: js_sys::Array = array.get(0).dyn_into()?;
-                let values: js_sys::Array = array.get(1).dyn_into()?;
+                let keys = array_to_vec_of_vecs(array.get(0).dyn_into()?);
+                let values = array_to_vec_of_vecs(array.get(1).dyn_into()?);
+                let storage = new_cozo_indexed_db(keys, values).map_err(|_| {
+                    JsValue::from_str("Error creating DbInstance")
+                })?;
 
-                let db = DbInstance::new_from_indexed_db(array_to_vec_of_vecs(keys), array_to_vec_of_vecs(values))
-                    .map_err(|_| {
-                        JsValue::from_str("Error creating DbInstance")
-                    })?;
+                let db = DbInstance::Mem(storage);
+
 
                 Ok(CozoDb { db })
             },

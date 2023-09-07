@@ -62,8 +62,8 @@ pub fn new_cozo_mem() -> Result<crate::Db<MemStorage>> {
 /// Create a database backed by memory.
 /// With persistent storage loaded from key-values.
 pub fn new_cozo_indexed_db(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<crate::Db<MemStorage>> {
-    let storage = MemStorage::new(keys, values);
-    let ret = crate::Db::new(storage)?;
+    let ret = crate::Db::new(MemStorage::new(keys, values))?;
+
     ret.initialize()?;
     Ok(ret)
 }

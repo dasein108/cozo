@@ -163,10 +163,6 @@ impl DbInstance {
         })
     }
 
-    pub fn new_from_indexed_db(keys: Vec<Vec<u8>>, values: Vec<Vec<u8>>) -> Result<Self> {
-        Ok(Self::Mem(new_cozo_indexed_db(keys, values)?))
-    }
-
     /// Same as [Self::new], but inputs and error messages are all in strings
     pub fn new_with_str(
         engine: &str,
