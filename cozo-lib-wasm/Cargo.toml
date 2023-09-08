@@ -1,6 +1,6 @@
 [package]
 name = "cozo-lib-wasm"
-version = "0.7.101"
+version = "0.7.105"
 edition = "2021"
 description = "Cozo database for WASM"
 authors = ["Ziyang Hu"]

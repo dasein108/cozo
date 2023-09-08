@@ -71,20 +71,28 @@ function App() {
   const importIpfs = async () => {
     console.time("Import Ipfs");
     console.log("----pins start import----");
+
+    console.time("[time]: pins");
     // const pins = (await listPins()).slice(0, 100);
     const pins = await listPins();
     cozoDb.executeBatchPutCommand("pin", pins, 100);
+
+    console.timeEnd("[time]: pins");
     const pinsDataTable = cozoDb.executeGetCommand("pin");
+
     const { cid: cidIdx, type: typeIdx } = pinsDataTable.index;
+
     const recursivePinCids = pinsDataTable.rows
       .filter((row) => row[typeIdx] === PinTypeEnum.recursive)
       .map((row) => row[cidIdx]);
+
+    console.time("[time]: paticle");
+    console.timeEnd("[time]: paticle");
     const files = await processByBatches(recursivePinCids, fileStat, 10);
     console.log("----files  import----", files);
     const particles = await processByBatches(files, catByInfo, 10);
     console.log("----particles  import----", particles);
-    cozoDb.executeBatchPutCommand("particle", particles, 10);
-
+    await cozoDb.executeBatchPutCommand("particle", particles, 10);
     // const files = await listFiles();
     // files.forEach(async (file) => {
     //   const result = cozoDb.executePutCommand("particle", [await file]);
@@ -94,19 +102,26 @@ function App() {
     const particlesDataTable = cozoDb.executeGetCommand("particle", [
       "blocks > 0",
     ]);
-    console.log("------particlesDataTable----", particlesDataTable);
-    particlesDataTable.rows
-      .map((p) => p[particlesDataTable.index.cid])
-      .forEach(async (cid) => {
-        const refs = await listRefs(cid);
-        const refsItems = refs.map((child) => ({
-          parent: cid,
-          child,
-        }));
+    const particleCids = particlesDataTable.rows.map(
+      (p) => p[particlesDataTable.index.cid]
+    );
+    console.time("[time]: refs");
+    // let refs = [];
+    // for (const cid of particleCids) {
+    //   const parentChilds = await listRefs(cid);
+    //   const refsByCid = parentChilds.map((child) => ({
+    //     parent: cid,
+    //     child,
+    //   }));
 
-        const result = cozoDb.executePutCommand("refs", refsItems);
-        console.log("----refs---- result", result);
-      });
+    //   refs.push(...refsByCid);
+    // }
+
+    // console.log("---refs count", refs.length, particleCids.length, refs);
+
+    // await cozoDb.executeBatchPutCommand("refs", refs, 100);
+    console.timeEnd("[time]: refs");
+
     console.timeEnd("Import Ipfs");
   };
 

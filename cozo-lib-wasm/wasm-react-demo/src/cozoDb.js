@@ -144,10 +144,6 @@ function DbService() {
     const result = JSON.parse(resultStr);
     console.log("----runCommand----", command, result);
 
-    // if (result.code) {
-    //   return { error: result.display };
-    // }
-
     return result;
   };
 
@@ -169,14 +165,15 @@ function DbService() {
       .join(", ")}]`;
   };
 
-  const executePutCommand = (tableName, array) => {
+  const executePutCommand = async (tableName, array) => {
     const atomCommand = generateAtomCommand(tableName, array);
     const putCommand = generatePutCommand(tableName);
     const command = `${atomCommand}\r\n${putCommand}`;
-    return runCommand(command);
+    const res = runCommand(command);
+    await CozoDb.wait_for_indexed_db_writes();
   };
 
-  const executeBatchPutCommand = (tableName, array, batchSize = 10) => {
+  const executeBatchPutCommand = async (tableName, array, batchSize = 10) => {
     const putCommand = generatePutCommand(tableName);
 
     for (let i = 0; i < array.length; i += batchSize) {
@@ -184,7 +181,8 @@ function DbService() {
       const atomCommand = generateAtomCommand(tableName, batch);
       const command = `${atomCommand}\r\n${putCommand}`;
       const res = runCommand(command);
-      console.log("----executeBatchPutCommand----", tableName, res);
+      //   console.log("----executeBatchPutCommand----", tableName, res);
+      await CozoDb.wait_for_indexed_db_writes();
     }
   };
 

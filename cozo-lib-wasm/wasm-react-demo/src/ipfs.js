@@ -163,6 +163,8 @@ export const catByInfo = async (info) => {
         mime.indexOf("text/plain") !== -1
           ? uint8ArrayToAsciiString(firstChunk)
           : "";
+      // text = text.replace(/"/g, '\\"');
+      text = text.replace(/"/g, "%20");
     }
   } else {
     mime = "";

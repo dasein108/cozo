@@ -57,18 +57,37 @@ export async function loadAllFromIndexedDb(dbName, storeName) {
   return await readStore();
 }
 
-let counter = 0;
-export async function saveToIndexedDb(key, value) {
+let writeCounter = 0; // TODO: use a queue instead of a counter
+
+// Hack, should be called to wait for pending writes before add new ones
+export async function waitForPendingWrites(timeoutDuration = 60000) {
+  const waitPromise = new Promise((resolve, reject) => {
+    const interval = setInterval(() => {
+      console.log("Transaction wait", writeCounter);
+      if (writeCounter < 1) {
+        clearInterval(interval);
+        resolve();
+      }
+    }, 50);
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("waitForPendingWrites timed out!"));
+    }, timeoutDuration);
+  });
+
+  return Promise.race([waitPromise, timeoutPromise]);
+}
+
+export async function writeToIndexedDb(key, value) {
   //   console.log("saveToIndexedDb", key, value);
 
   return new Promise((resolve, reject) => {
-    counter++;
-    console.log("Transaction started", counter);
+    writeCounter++;
+    // console.log("Transaction started", writeCounter);
     const transaction = db.transaction(cozoDbStore, "readwrite");
     const store = transaction.objectStore(cozoDbStore);
-    // transaction.addEventListener("complete", (event) => {
-    //     console.log("Transaction was completed", counter);
-    //   });
     if (!value) {
       store.delete(key);
     } else {
@@ -78,13 +97,12 @@ export async function saveToIndexedDb(key, value) {
     requestToPromise(value ? store.put(value, key) : store.delete(key));
 
     transaction.oncomplete = function () {
-      counter--;
-      console.log("Transaction completed", counter);
+      writeCounter--;
       resolve();
     };
     transaction.onerror = function (event) {
-      counter--;
-      console.log("Transaction err", counter);
+      writeCounter--;
+      console.log("Transaction err", writeCounter);
       reject(event.error);
     };
   });

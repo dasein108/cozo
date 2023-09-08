@@ -46,7 +46,7 @@ macro_rules! console_log {
 
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
-    fn saveToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
+    fn writeToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
 }
 
 
@@ -208,7 +208,7 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
                         None => {
                             wtr.remove(&k);
                             // sync with indexedDb
-                            saveToIndexedDb(&key_js_value, &JsValue::null());
+                            writeToIndexedDb(&key_js_value, &JsValue::null());
 
                         }
                         Some(v) => {
@@ -216,7 +216,7 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
 
                             // sync with indexedDb
                             let value_js_value = Uint8Array::from(&v[..]).into();
-                            saveToIndexedDb(&key_js_value, &value_js_value);
+                            writeToIndexedDb(&key_js_value, &value_js_value);
 
                         }
                     }

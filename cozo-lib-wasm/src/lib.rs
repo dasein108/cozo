@@ -48,6 +48,7 @@ pub struct CozoDb {
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
     fn loadAllFromIndexedDb(db_name: &str, db_value: &str) -> js_sys::Promise;
+    fn waitForPendingWrites() -> js_sys::Promise;
 }
 
 fn array_to_vec_of_vecs(arr: Array) -> Vec<Vec<u8>> {
@@ -71,6 +72,11 @@ impl CozoDb {
         utils::set_panic_hook();
         let db = DbInstance::new("mem", "", "").unwrap();
         Self { db }
+    }
+
+    pub async fn wait_for_indexed_db_writes() -> Result<(), JsValue> {
+        JsFuture::from(waitForPendingWrites()).await?;
+        Ok(())
     }
 
     /// Create CozoDb from IndexedDB
