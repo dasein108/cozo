@@ -1,10 +1,12 @@
 let db = null;
 let cozoDbStore = null;
+let writeCounter = 0;
+let writeCallback = null;
 
-function requestToPromise(req) {
+function storeRequestToPromise(req) {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error);
+    req.onerror = (e) => reject(e.error);
   });
 }
 
@@ -20,10 +22,6 @@ export async function openDatabase(dbName, storeName) {
       }
     };
 
-    // return requestToPromise(request).then((db_) => {
-    //   db = event.target.result;
-    //   resolve(db);
-    // });
     request.onsuccess = function (event) {
       db = event.target.result;
       resolve(db);
@@ -39,8 +37,8 @@ export async function readStore() {
     const transaction = db.transaction(cozoDbStore, "readonly");
     const store = transaction.objectStore(cozoDbStore);
 
-    const itemsPromise = requestToPromise(store.getAll());
-    const keysPromise = requestToPromise(store.getAllKeys());
+    const itemsPromise = storeRequestToPromise(store.getAll());
+    const keysPromise = storeRequestToPromise(store.getAllKeys());
 
     Promise.all([keysPromise, itemsPromise])
       .then((results) => {
@@ -52,58 +50,25 @@ export async function readStore() {
   });
 }
 
-export async function loadAllFromIndexedDb(dbName, storeName) {
+export async function loadAllFromIndexedDb(dbName, storeName, onWriteCallback) {
+  writeCallback = onWriteCallback;
   await openDatabase(dbName, storeName);
   return await readStore();
 }
 
-let writeCounter = 0; // TODO: use a queue instead of a counter
-
-// Hack, should be called to wait for pending writes before add new ones
-export async function waitForPendingWrites(timeoutDuration = 60000) {
-  const waitPromise = new Promise((resolve, reject) => {
-    const interval = setInterval(() => {
-      console.log("Transaction wait", writeCounter);
-      if (writeCounter < 1) {
-        clearInterval(interval);
-        resolve();
-      }
-    }, 50);
-  });
-
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error("waitForPendingWrites timed out!"));
-    }, timeoutDuration);
-  });
-
-  return Promise.race([waitPromise, timeoutPromise]);
-}
-
 export async function writeToIndexedDb(key, value) {
-  //   console.log("saveToIndexedDb", key, value);
-
   return new Promise((resolve, reject) => {
-    writeCounter++;
-    // console.log("Transaction started", writeCounter);
     const transaction = db.transaction(cozoDbStore, "readwrite");
     const store = transaction.objectStore(cozoDbStore);
-    if (!value) {
-      store.delete(key);
-    } else {
-      store.put(value, key);
-    }
 
-    requestToPromise(value ? store.put(value, key) : store.delete(key));
-
-    transaction.oncomplete = function () {
-      writeCounter--;
-      resolve();
-    };
-    transaction.onerror = function (event) {
-      writeCounter--;
-      console.log("Transaction err", writeCounter);
-      reject(event.error);
-    };
+    const request = value ? store.put(value, key) : store.delete(key);
+    writeCounter++;
+    storeRequestToPromise(request)
+      .then(resolve)
+      .catch(reject)
+      .finally(() => {
+        writeCounter--;
+        writeCallback && writeCallback(writeCounter);
+      });
   });
 }

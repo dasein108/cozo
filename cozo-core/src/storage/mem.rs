@@ -30,20 +30,6 @@ use wasm_bindgen::prelude::*;
 use js_sys::Uint8Array;
 
 
-#[wasm_bindgen]
-extern "C" {
-    #[wasm_bindgen(js_namespace = console)]
-    pub fn log(s: &str);
-}
-
-// Next let's define a macro that's like `println!`, only it works for
-// `console.log`. Note that `println!` doesn't actually work on the wasm target
-// because the standard library currently just eats all output. To get
-// `println!`-like behavior in your app you'll likely want a macro like this.
-macro_rules! console_log {
-    ($($t:tt)*) => (log(&format_args!($($t)*).to_string()))
-}
-
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
     fn writeToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
@@ -199,7 +185,6 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
             MemTx::Writer(wtr, cached) => {
                 let mut cache = BTreeMap::default();
                 mem::swap(&mut cache, cached);
-                console_log!("commit {:?}", cache.len());
 
                 for (k, mv) in cache {
                     let key_js_value = Uint8Array::from(&k[..]).into();

@@ -45,9 +45,10 @@ pub struct CozoDb {
     db: DbInstance,
 }
 
+
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
-    fn loadAllFromIndexedDb(db_name: &str, db_value: &str) -> js_sys::Promise;
+    fn loadAllFromIndexedDb(db_name: &str, db_value: &str, on_write_callback: &JsValue) -> js_sys::Promise;
     fn waitForPendingWrites() -> js_sys::Promise;
 }
 
@@ -74,24 +75,19 @@ impl CozoDb {
         Self { db }
     }
 
-    pub async fn wait_for_indexed_db_writes() -> Result<(), JsValue> {
-        JsFuture::from(waitForPendingWrites()).await?;
-        Ok(())
-    }
-
     /// Create CozoDb from IndexedDB
-    pub async fn new_from_indexed_db(db_name: &str, store_name: &str) -> Result<CozoDb, JsValue> {
+    pub async fn new_from_indexed_db(db_name: &str, store_name: &str, on_write_callback: &JsValue)-> Result<CozoDb, JsValue> {
         utils::set_panic_hook();
-        log("starting new_from_indexed_db...Xzzxzzxzx");
+        log("CozoDB: loadig from IndexedDb...");
 
-        let result = JsFuture::from(loadAllFromIndexedDb(db_name, store_name)).await?;
+        let result = JsFuture::from(loadAllFromIndexedDb(db_name, store_name, on_write_callback)).await?;
 
         match result.dyn_into::<js_sys::Array>() {
             Ok(array) => {
                 let keys = array_to_vec_of_vecs(array.get(0).dyn_into()?);
                 let values = array_to_vec_of_vecs(array.get(1).dyn_into()?);
 
-                console_log!("CozoDb: Importing {:?} keys  from indexDB", keys.len());
+                let keys_len = keys.len();
 
                 let mut db_snap: BTreeMap<Vec<u8>, Vec<u8>> = BTreeMap::new();
 
@@ -99,9 +95,7 @@ impl CozoDb {
                 for (key, value) in keys.into_iter().zip(values.into_iter()) {
                     db_snap.insert(key, value);
                 }
-
-                console_log!("CozoDb: Importing done!");
-
+                console_log!("CozoDb: Loaded {:?} rows from IndexedDB", keys_len);
 
                 let ret = crate::Db::new(MemStorage::new(db_snap)).map_err(|_| {
                     JsValue::from_str("Error creating DbInstance")
@@ -122,32 +116,6 @@ impl CozoDb {
             }
         }
     }
-    // pub async fn new_from_indexed_db(db_name: &str, store_name: &str) -> Result<CozoDb, DomException> {
-    //     let store_n = store_name.to_string(); // Convert &str to String
-
-    //     // Open my_db v1
-    //     let mut db_req: OpenDbRequest = IdbDatabase::open_u32(db_name, 1)?;
-    //     db_req.set_on_upgrade_needed(Some(move |evt: &IdbVersionChangeEvent| -> Result<(), JsValue> {
-    //         // Check if the object store exists; create it if it doesn't
-    //         if let None = evt.db().object_store_names().find(|n| n == &store_n) {
-    //             evt.db().create_object_store(&store_n)?;
-    //             log("CozoDb created indexedDb store");
-    //         }
-    //         Ok(())
-    //     }));
-
-    //     let indexedDb: IdbDatabase = db_req.into_future().await?;
-    //     let tx = db.transaction_on_one(store_name)?;
-    //     let store = tx.object_store(store_name)?;
-
-    //     let keys = store.get_all_keys()?.await?;
-    //     let values = store.get_all()?.await?;
-
-    //     console_log!("Database opened successfully");
-    //     console_log!("Read from indexDB {:?} {:?}", keys, values);
-
-    //     Ok::<CozoDb, DomException>(CozoDb { db: DbInstance::default()})
-    // }
 
     pub fn run(&self, script: &str, params: &str, immutable: bool) -> String {
         self.db.run_script_str(script, params, immutable)

@@ -6,18 +6,27 @@
  * You can obtain one at https://mozilla.org/MPL/2.0/.
  */
 
-
 @import "~normalize.css";
 @import "~@blueprintjs/core/lib/css/blueprint.css";
 @import "~@blueprintjs/icons/lib/css/blueprint-icons.css";
 @import "~@blueprintjs/table/lib/css/table.css";
-#error-message, #other-results {
+
+#error-message,
+#other-results {
   padding: 10px;
   overflow: scroll;
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-size: 90%;
 }
-#query-box, #params-box {
+
+#import-results {
+  padding: 10px;
+  font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
+  font-size: 90%;
+}
+
+#query-box,
+#params-box {
   font-family: Menlo, Monaco, Consolas, "Courier New", monospace;
   font-size: 100%;
   min-height: 200px;
@@ -26,4 +35,33 @@
 }
 #welcome {
   padding: 15px;
+}
+
+main {
+  width: 100vw;
+  height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.query-panel {
+  margin: 10px;
+}
+
+.button-panel {
+  display: flex;
+  flex-direction: row;
+  justify-content: space-between;
+  align-items: center;
+  margin-top: 10px;
+}
+
+.action-buttons {
+  flex: 1;
+  justify-content: right;
+  display: flex;
+}
+
+.query-info {
+  margin-left: 15px;
 }

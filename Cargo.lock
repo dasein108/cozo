@@ -792,19 +792,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "cozo-lib-wasm"
-version = "0.7.105"
-dependencies = [
- "console_error_panic_hook",
- "cozo",
- "js-sys",
- "wasm-bindgen",
- "wasm-bindgen-futures",
- "wasm-bindgen-test",
- "wee_alloc",
-]
-
-[[package]]
 name = "cozo-node"
 version = "0.7.4"
 dependencies = [
@@ -1045,6 +1032,19 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn 2.0.23",
+]
+
+[[package]]
+name = "cyb-cozo-lib-wasm"
+version = "0.7.13"
+dependencies = [
+ "console_error_panic_hook",
+ "cozo",
+ "js-sys",
+ "wasm-bindgen",
+ "wasm-bindgen-futures",
+ "wasm-bindgen-test",
+ "wee_alloc",
 ]
 
 [[package]]
