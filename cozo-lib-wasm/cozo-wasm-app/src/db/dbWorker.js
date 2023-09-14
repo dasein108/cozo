@@ -40,14 +40,11 @@ const api = {
   },
 
   async runCommand(command) {
-    const result = dbService.runCommand(command);
-    return result;
+    return dbService.runCommand(command);
   },
 
   async executePutCommand(tableName, array) {
-    const result = dbService.executePutCommand(tableName, array);
-    await this.flushPendingWrites();
-    return result;
+    return dbService.executePutCommand(tableName, array);
   },
 
   async executeBatchPutCommand(tableName, array, batchSize, onProgress) {
@@ -57,16 +54,13 @@ const api = {
     for (let i = 0; i < array.length; i += batchSize) {
       const batch = array.slice(i, i + batchSize);
       const atomCommand = commandFactory.generateAtomCommand(tableName, batch);
-      runCommand([atomCommand, putCommand].join("\r\n"));
-
-      // flush long pool of indexeddb writes
-      await this.flushPendingWrites();
+      await runCommand([atomCommand, putCommand].join("\r\n"));
 
       onProgress && onProgress(i + batch.length);
     }
   },
 
-  executeGetCommand(tableName, conditionArr, keys) {
+  async executeGetCommand(tableName, conditionArr, keys) {
     return dbService.executeGetCommand(tableName, conditionArr, keys);
   },
 };

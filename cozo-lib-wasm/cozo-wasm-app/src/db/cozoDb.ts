@@ -1,6 +1,7 @@
 import initCozoDb, { CozoDb } from "cyb-cozo-lib-wasm";
 
 import initializeScript from "./migrations/schema.cozo";
+import { async } from "rxjs";
 
 const DB_NAME = "cozo-idb-demo";
 const DB_STORE_NAME = "cozodb";
@@ -132,15 +133,15 @@ function DbService() {
     await initCozoDb();
 
     db = await CozoDb.new_from_indexed_db(DB_NAME, DB_STORE_NAME, callback);
-    dbSchema = initDbSchema();
+    dbSchema = await initDbSchema();
     commandFactory = CozoDbCommandFactory(dbSchema);
 
     console.log("CozoDb schema initialized: ", dbSchema);
 
     return db;
   }
-  const getRelations = (): string[] => {
-    const result = runCommand("::relations");
+  const getRelations = async (): Promise<string[]> => {
+    const result = await runCommand("::relations");
     if (result.ok !== true) {
       throw new Error(result.message);
     }
@@ -148,18 +149,18 @@ function DbService() {
     return result.rows.map((row) => row[0] as string);
   };
 
-  const initDbSchema = (): DBSchema => {
-    let relations = getRelations();
+  const initDbSchema = async (): Promise<DBSchema> => {
+    let relations = await getRelations();
 
     if (relations.length === 0) {
       console.log("CozoDb: apply DB schema", initializeScript);
       runCommand(initializeScript);
-      relations = getRelations();
+      relations = await getRelations();
     }
 
-    const schemas: DBSchema = Object.fromEntries(
-      relations.map((table) => {
-        const columnResult = runCommand(`::columns ${table}`);
+    const schemasMap = await Promise.all(
+      relations.map(async (table) => {
+        const columnResult = await runCommand(`::columns ${table}`);
         if (!columnResult.ok) {
           throw new Error((columnResult as IDBResultError).message);
         }
@@ -181,17 +182,17 @@ function DbService() {
       })
     );
 
-    return schemas;
+    return Object.fromEntries(schemasMap);
   };
 
-  const runCommand = (
+  const runCommand = async (
     command: string,
     immutable = false
-  ): IDBResult | IDBResultError => {
+  ): Promise<IDBResult | IDBResultError> => {
     if (!db) {
       throw new Error("DB is not initialized");
     }
-    const resultStr = db.run(command, "", immutable);
+    const resultStr = await db.run(command, "", immutable);
     const result = JSON.parse(resultStr);
     console.log("----> runCommand ", command, result);
 
@@ -207,7 +208,7 @@ function DbService() {
   const get = (
     tableName: string,
     conditionArr: string[] = []
-  ): IDBResult | IDBResultError =>
+  ): Promise<IDBResult | IDBResultError> =>
     runCommand(commandFactory.generateGet(tableName, conditionArr), true);
 
   return {

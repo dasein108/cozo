@@ -10,7 +10,7 @@ function storeRequestToPromise(req) {
   });
 }
 
-export async function openDatabase(dbName, storeName) {
+async function openDatabase(dbName, storeName) {
   cozoDbStore = storeName;
 
   return new Promise((resolve, reject) => {
@@ -32,7 +32,7 @@ export async function openDatabase(dbName, storeName) {
   });
 }
 
-export async function readStore() {
+async function readStore() {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(cozoDbStore, "readonly");
     const store = transaction.objectStore(cozoDbStore);
@@ -48,6 +48,26 @@ export async function readStore() {
       })
       .catch(reject);
   });
+}
+
+export async function flushPendingWrites(timeoutDuration = 60000) {
+  const waitPromise = new Promise((resolve, reject) => {
+    const interval = setInterval(() => {
+      if (writeCounter < 1) {
+        clearInterval(interval);
+        resolve();
+      }
+      console.log(`Waiting for pending writes ${writeCounter}`);
+    }, 10);
+  });
+
+  const timeoutPromise = new Promise((_, reject) => {
+    setTimeout(() => {
+      reject(new Error("waitForPendingWrites timed out!"));
+    }, timeoutDuration);
+  });
+
+  return Promise.race([waitPromise, timeoutPromise]);
 }
 
 export async function loadAllFromIndexedDb(dbName, storeName, onWriteCallback) {

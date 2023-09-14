@@ -49,7 +49,7 @@ pub struct CozoDb {
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
     fn loadAllFromIndexedDb(db_name: &str, db_value: &str, on_write_callback: &JsValue) -> js_sys::Promise;
-    fn waitForPendingWrites() -> js_sys::Promise;
+    fn flushPendingWrites() -> js_sys::Promise;
 }
 
 fn array_to_vec_of_vecs(arr: Array) -> Vec<Vec<u8>> {
@@ -117,9 +117,12 @@ impl CozoDb {
         }
     }
 
-    pub fn run(&self, script: &str, params: &str, immutable: bool) -> String {
-        self.db.run_script_str(script, params, immutable)
+    pub async fn run(&self, script: &str, params: &str, immutable: bool) -> Result<String, JsValue> {
+        let result = self.db.run_script_str(script, params, immutable);
+        JsFuture::from(flushPendingWrites()).await?;
+        Ok(result)
     }
+
     pub fn export_relations(&self, data: &str) -> String {
         self.db.export_relations_str(data)
     }
