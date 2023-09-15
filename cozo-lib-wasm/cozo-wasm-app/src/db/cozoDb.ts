@@ -8,7 +8,7 @@ const DB_STORE_NAME = "cozodb";
 
 interface Column {
   column: string;
-  type: "String" | "Int" | "Bool";
+  type: "String" | "Int" | "Bool" | "Float";
   is_key?: boolean;
   index: number;
   is_default: boolean;
@@ -140,6 +140,7 @@ function DbService() {
 
     return db;
   }
+
   const getRelations = async (): Promise<string[]> => {
     const result = await runCommand("::relations");
     if (result.ok !== true) {
@@ -165,9 +166,7 @@ function DbService() {
           throw new Error((columnResult as IDBResultError).message);
         }
 
-        const fields: Column[] = toListOfObjects<Column>(
-          columnResult
-        ) as Column[];
+        const fields = toListOfObjects<Column>(columnResult);
         const keys = fields.filter((c) => c.is_key).map((c) => c.column);
         const values = fields.filter((c) => !c.is_key).map((c) => c.column);
         const tableSchema: TableSchema = {

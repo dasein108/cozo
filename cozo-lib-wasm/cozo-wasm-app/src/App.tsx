@@ -71,24 +71,13 @@ function App() {
   const importCoingecko = async () => {
     const t1 = performance.now();
     clearLog();
-    appendLog("Fetch coins from Coingecko...");
-    const coins = await (
-      await fetch("https://api.coingecko.com/api/v3/coins/list")
-    ).json();
-    appendLog(`⏳ Import 0/${coins.length} coins into db...`);
-    await cozoDb.executeBatchPutCommand("coin", coins, 100, (counter) =>
-      updateLastLog(`⏳ Import ${counter}/${coins.length} coins into db...`)
-    );
-    updateLastLog(
-      `☑️ Imported ${coins.length} coins in ${diffMs(t1, performance.now())}.`
-    );
+    appendLog("Fetch USD markets...");
 
-    const t2 = performance.now();
-    appendLog("Fetch USDT markets...");
     const vsCurrency = "usd";
+
     const markets = await (
       await fetch(
-        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&order=market_cap_desc&per_page=1000&page=1&sparkline=false&locale=en`
+        `https://api.coingecko.com/api/v3/coins/markets?vs_currency=${vsCurrency}&order=market_cap_desc&per_page=250&page=1&sparkline=false&locale=en`
       )
     ).json();
     const marketsNormalized = markets.map((item) => ({
@@ -96,7 +85,9 @@ function App() {
       vs_currency: vsCurrency,
       last_updated: new Date(item.last_updated).getTime(),
     }));
+
     appendLog(`⏳ Import 0/${markets.length} markets into db...`);
+
     await cozoDb.executeBatchPutCommand(
       "market",
       marketsNormalized,
@@ -107,11 +98,28 @@ function App() {
         );
       }
     );
+    const marketIds = markets.map((item) => item.id);
+
     updateLastLog(
       `☑️ Imported ${markets.length} markets in ${diffMs(
-        t2,
+        t1,
         performance.now()
       )}.`
+    );
+
+    const t2 = performance.now();
+
+    appendLog("Fetch coins from Coingecko...");
+    const coins = (
+      await (await fetch("https://api.coingecko.com/api/v3/coins/list")).json()
+    ).filter((item) => marketIds.includes(item.id));
+
+    appendLog(`⏳ Import 0/${coins.length} coins into db...`);
+    await cozoDb.executeBatchPutCommand("coin", coins, 100, (counter) =>
+      updateLastLog(`⏳ Import ${counter}/${coins.length} coins into db...`)
+    );
+    updateLastLog(
+      `☑️ Imported ${coins.length} coins in ${diffMs(t2, performance.now())}.`
     );
 
     appendLog(["", `🎉 All done in ${diffMs(t1, performance.now())}`]);
