@@ -3,6 +3,12 @@ let cozoDbStore = null;
 let writeCounter = 0;
 let writeCallback = null;
 
+let cmdFlag = false;
+
+export function setWriteCounter(count) {
+  writeCounter = count;
+}
+
 function storeRequestToPromise(req) {
   return new Promise((resolve, reject) => {
     req.onsuccess = () => resolve(req.result);
@@ -51,23 +57,44 @@ async function readStore() {
 }
 
 export async function flushPendingWrites(timeoutDuration = 60000) {
+  let timeout = null;
+
+  // allow only one command runnig at a time
+  if (cmdFlag) {
+    await new Promise((resolve, reject) => {
+      const interval = setInterval(() => {
+        if (!cmdFlag) {
+          clearInterval(interval);
+          resolve();
+        }
+      }, 10);
+    });
+  }
+
+  cmdFlag = true;
+
   const waitPromise = new Promise((resolve, reject) => {
     const interval = setInterval(() => {
-      if (writeCounter < 1) {
+      if (writeCounter <= 0) {
+        if (timeout) {
+          clearTimeout(timeout);
+        }
         clearInterval(interval);
         resolve();
       }
-      console.log(`Waiting for pending writes ${writeCounter}`);
     }, 10);
   });
 
   const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
+    timeout = setTimeout(() => {
       reject(new Error("waitForPendingWrites timed out!"));
     }, timeoutDuration);
   });
 
-  return Promise.race([waitPromise, timeoutPromise]);
+  // wait until all pending writes are done
+  return Promise.race([waitPromise, timeoutPromise]).finally(() => {
+    cmdFlag = false;
+  });
 }
 
 export async function loadAllFromIndexedDb(dbName, storeName, onWriteCallback) {
@@ -80,10 +107,8 @@ export async function writeToIndexedDb(key, value) {
   return new Promise((resolve, reject) => {
     const transaction = db.transaction(cozoDbStore, "readwrite");
     const store = transaction.objectStore(cozoDbStore);
-
     const request = value ? store.put(value, key) : store.delete(key);
-    writeCounter++;
-    storeRequestToPromise(request)
+    return storeRequestToPromise(request)
       .then(resolve)
       .catch(reject)
       .finally(() => {

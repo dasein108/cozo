@@ -114,8 +114,12 @@ impl CozoDb {
     }
 
     pub async fn run(&self, script: &str, params: &str, immutable: bool) -> Result<String, JsValue> {
+        if !immutable {
+            // double wrap to avoid hanging put in case of flood of commands
+            JsFuture::from(flushPendingWrites()).await?;
+        }
+
         let result = self.db.run_script_str(script, params, immutable);
-        JsFuture::from(flushPendingWrites()).await?;
         Ok(result)
     }
 

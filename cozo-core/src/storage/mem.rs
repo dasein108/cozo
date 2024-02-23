@@ -33,6 +33,7 @@ use js_sys::Uint8Array;
 #[wasm_bindgen(raw_module = "./indexeddb.js")]
 extern "C" {
     fn writeToIndexedDb(key: &JsValue, value: &JsValue) -> js_sys::Promise;
+    fn setWriteCounter(n: u32);
 }
 
 
@@ -181,7 +182,10 @@ impl<'s> StoreTx<'s> for MemTx<'s> {
             MemTx::Reader(_) => Ok(()),
             MemTx::Writer(wtr, cached) => {
                 let mut cache = BTreeMap::default();
+
                 mem::swap(&mut cache, cached);
+
+                setWriteCounter(cache.keys().len() as u32);
 
                 for (k, mv) in cache {
                     let key_js_value = Uint8Array::from(&k[..]).into();
